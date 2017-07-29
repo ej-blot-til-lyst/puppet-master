@@ -4,12 +4,13 @@
 module Main where
 
 import Puppetry.Slave
+import Data.Text as T
 
 main :: IO ()
 main = do
-  print "hello"
+  print "Hallo"
   serve action
 
 action :: Action
 action message =
-  message
+  T.pack $ "Nemlig " ++ (T.unpack message)
