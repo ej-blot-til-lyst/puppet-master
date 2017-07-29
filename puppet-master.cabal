@@ -16,6 +16,7 @@ extra-source-files:  README.md
 library
   hs-source-dirs:      src/main
   exposed-modules:     Puppetry.Slave
+                       Puppetry.WebSocketServer
   build-depends:       base >= 4.7 && < 5
                      , text
                      , wai

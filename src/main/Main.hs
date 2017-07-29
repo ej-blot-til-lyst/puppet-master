@@ -3,14 +3,23 @@
 
 module Main where
 
-import Puppetry.Slave
+-- import Puppetry.Slave
+import Puppetry.WebSocketServer
 import Data.Text as T
+
+
+type State = ()
+type Action
+  = MsgReceived T.Text
 
 main :: IO ()
 main = do
   print "Hallo"
-  serve action
+  simpleServer (WebSocketServer update () (MsgReceived) init)
 
-action :: Action
-action message =
-  T.pack $ "Nemlig " ++ (T.unpack message)
+update action state =
+  case action of
+    MsgReceived message ->
+      (Broadcast $ T.pack ("Nemlig " ++ (T.unpack message)), state)
+
+init = ()
