@@ -109,8 +109,8 @@ type Subscription action = ()
 data Effect
   = SendMessage ClientId Text.Text
   | Broadcast Text.Text
-  | EBatch [Effect]
-  | ENoOp
+  | Batch [Effect]
+  | NoOp
 
 handleEffect :: Effect -> ClientMap -> IO ()
 handleEffect e cm =
@@ -121,7 +121,7 @@ handleEffect e cm =
         otherwise -> undefined
     Broadcast txt ->
       forM_ (getClients cm) $ flip WS.sendTextData txt
-    EBatch lst ->
+    Batch lst ->
       forM_ lst (flip handleEffect cm)
-    ENoOp ->
+    NoOp ->
     return ()
