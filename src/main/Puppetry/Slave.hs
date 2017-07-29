@@ -44,17 +44,18 @@ withoutClient :: ClientId -> State -> State
 withoutClient clientId = List.filter ((/=) clientId . fst)
 
 disconnectClient :: ClientId -> Concurrent.MVar State -> IO ()
-disconnectClient clientId stateRef = Concurrent.modifyMVar_ stateRef $ \state ->
-  return $ withoutClient clientId state
+disconnectClient clientId stateRef =
+  Concurrent.modifyMVar_ stateRef $ \state ->
+    return $ withoutClient clientId state
 
 listen :: Action -> WS.Connection -> ClientId -> Concurrent.MVar State -> IO ()
 listen action conn clientId stateRef = Monad.forever $ do
-  WS.receiveData conn >>= broadcast action clientId stateRef
+  msg <- WS.receiveData conn
+  broadcast action clientId stateRef msg
 
 broadcast :: Action -> ClientId -> Concurrent.MVar State -> Text.Text -> IO ()
 broadcast action clientId stateRef msg = do
-  clients <- Concurrent.readMVar stateRef
-  let otherClients = withoutClient clientId clients
+  otherClients <- withoutClient clientId <$> Concurrent.readMVar stateRef
   Monad.forM_ otherClients $ \(_, conn) ->
     WS.sendTextData conn (action msg)
 
