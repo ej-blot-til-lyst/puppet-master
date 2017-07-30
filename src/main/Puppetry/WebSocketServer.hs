@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- The goal of this module is to provide an interface to create
 -- a web socket server, using wai.
 
@@ -9,14 +11,17 @@ module Puppetry.WebSocketServer
   , Effect (..)
   ) where
 
+import Prelude hiding (init)
+
 import Control.Exception (finally)
 import Control.Concurrent  (MVar, newMVar, modifyMVar, modifyMVar_)
-import Control.Monad (forever)
+import Control.Monad (forever, forM_)
 
 import qualified Data.List                      as List
 import qualified Data.Maybe                     as Maybe
 import qualified Data.IntMap.Strict             as IntMap
 import qualified Data.Text                      as Text
+import qualified Network.HTTP.Types             as Http
 import qualified Network.Wai                    as Wai
 import qualified Network.Wai.Handler.Warp       as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
@@ -40,34 +45,33 @@ data WebSocketServer action state =
 
 type SocketState state = (state, ClientMap)
 
-type WSS a s r :: WebSocketServer a s -> r
-
-startServer :: WebSocketServer a s -> IO Ws.ServerApp
+startServer :: WebSocketServer a s -> IO WS.ServerApp
 startServer options = do
-  state <- Concurrent.newMVar (init options, [])
+  state <- newMVar (init options, IntMap.empty)
   return $ acceptConnection state
 
   where
-    acceptConnection state pendingConn = do
+    acceptConnection stateRef pendingConn = do
       -- accept the incoming connection
       conn <- WS.acceptRequest pendingConn
 
-      clientId <- registerClient state conn
+      clientId <- registerClient stateRef conn
 
       -- Keep connection alive, by pinging every 30 second
-      Ws.forkPingThread conn 30
+      WS.forkPingThread conn 30
 
       -- Listen until the connection is lost
-      finally (listen stateRef conn) (disconnectClient state clientId)
+      finally (listen stateRef conn) (disconnectClient stateRef clientId)
 
-    listen stateRef conn =
+    listen stateRef conn = do
       action <- decodeMsg options <$> WS.receiveData conn
       updateServer stateRef action
 
     updateServer stateRef action = do
-      modifyMVar stateRef $ \(s, cm) -> do
+      modifyMVar_ stateRef $ \(s, cm) -> do
         let (s', e) = update options action s
         handleEffect e cm
+        return (s', cm)
 
 simpleServer :: WebSocketServer a s -> IO ()
 simpleServer options = do
@@ -80,25 +84,24 @@ simpleServer options = do
 httpApp :: Wai.Application
 httpApp _ respond = respond $ Wai.responseLBS Http.status400 [] "Not a websocket request"
 
-
 -- Handlers
 
 registerClient :: MVar (SocketState s) -> WS.Connection -> IO ClientId
 registerClient stateRef conn =
   modifyMVar stateRef $ \(s, cm) -> do
-     let clientId = Safe.maximumDef -1 (IntMap.keys cm) + 1
-     return ((s, IntMap.insert clientId con cm), clientId)
+     let clientId = Safe.maximumDef (-1) (IntMap.keys cm) + 1
+     return ((s, IntMap.insert clientId conn cm), clientId)
 
 disconnectClient :: MVar (SocketState s) -> ClientId -> IO ()
-disconnectClient stateRef stateRef =
+disconnectClient stateRef clientId =
   modifyMVar_ stateRef $ \(s, cm) -> do
     return (s, IntMap.delete clientId cm)
 
 getClient :: ClientMap -> ClientId -> Maybe.Maybe WS.Connection
-getClient cm cid = IntMap.lookup cm cid
+getClient cm cid = IntMap.lookup cid cm
 
 getClients :: ClientMap -> [WS.Connection]
-getClients cm = IntMap.values cm
+getClients cm = IntMap.elems cm
 
 -- Subscriptions
 
@@ -116,7 +119,7 @@ handleEffect :: Effect -> ClientMap -> IO ()
 handleEffect e cm =
   case e of
     SendMessage cid txt ->
-      case getClient cid cm of
+      case getClient cm cid of
         Maybe.Just conn -> WS.sendTextData conn txt
         otherwise -> undefined
     Broadcast txt ->
@@ -124,4 +127,4 @@ handleEffect e cm =
     EBatch lst ->
       forM_ lst (flip handleEffect cm)
     ENoOp ->
-    return ()
+      return ()

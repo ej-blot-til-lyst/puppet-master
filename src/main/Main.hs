@@ -20,6 +20,6 @@ main = do
 update action state =
   case action of
     MsgReceived message ->
-      (Broadcast $ T.pack ("Nemlig " ++ (T.unpack message)), state)
+      (state, Broadcast $ T.pack ("Nemlig " ++ (T.unpack message)))
 
 init = ()
