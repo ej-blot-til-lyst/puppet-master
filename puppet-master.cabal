@@ -14,7 +14,7 @@ cabal-version:       >=1.10
 extra-source-files:  README.md
 
 library
-  hs-source-dirs:      src/main
+  hs-source-dirs:      src
   exposed-modules:     Puppetry.Slave
                        Puppetry.WebSocketServer
   build-depends:       base >= 4.7 && < 5
@@ -33,17 +33,9 @@ library
 
 
 executable puppet-master-exe
-  hs-source-dirs:      src/main
+  hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:       base
                      , puppet-master
-                     , wai
                      , text
-                     , wai-websockets
-                     , warp
-                     , websockets
-                     , http-types
-                     , safe
-                     , scotty
-                     , blaze-html
   default-language:    Haskell2010
